@@ -1,0 +1,377 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>v6- 2up</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      .label-row {
+        width: 100mm;
+        height: 25mm;
+        display: flex;
+        flex-direction: row;
+        background: white;
+        overflow: hidden;
+        box-sizing: border-box;
+      }
+
+      @media screen {
+        #print-area {
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+          padding: 20px;
+          background: #334155;
+          border-radius: 8px;
+        }
+      }
+
+      @media print {
+        body * {
+          visibility: hidden;
+          margin: 0;
+          padding: 0;
+        }
+        #print-area,
+        #print-area * {
+          visibility: visible;
+        }
+        #print-area {
+          position: absolute;
+          left: 0;
+          top: 0;
+          width: 100mm;
+        }
+        .label-row {
+          page-break-after: always;
+          page-break-inside: avoid;
+          border: none !important;
+        }
+        @page {
+          size: 100mm 25mm;
+          margin: 0;
+        }
+        .print-hidden {
+          display: none !important;
+        }
+      }
+    </style>
+  </head>
+  <body class="bg-blue-100 max-w-7xl mx-auto p-4">
+    <div class="print-hidden">
+      <h2 class="text-slate-700 font-medium text-4xl text-center mt-5 mb-8">
+        Label Print - 2UP
+      </h2>
+
+      <div class="bg-white p-6 rounded-xl shadow-sm border border-blue-200">
+        <div class="grid gap-6 md:grid-cols-3 mb-6">
+          <div class="relative">
+            <label class="block mb-1.5 font-bold text-slate-600"
+              >Item name :</label
+            >
+            <input
+              type="text"
+              id="item-name"
+              autocomplete="off"
+              class="border border-slate-300 rounded-md block w-full px-3 py-2 focus:ring-2 focus:ring-blue-400 outline-none"
+            />
+            <ul
+              id="product-list"
+              class="absolute z-50 w-full bg-white border border-slate-300 rounded-md shadow-lg max-h-60 overflow-y-auto hidden"
+            ></ul>
+          </div>
+          <div>
+            <label class="block mb-1.5 font-bold text-slate-600"
+              >Barcode No :</label
+            >
+            <input
+              type="text"
+              id="input-barcode-number"
+              class="border border-slate-300 rounded-md block w-full px-3 py-2 focus:ring-2 focus:ring-blue-400 outline-none"
+            />
+          </div>
+          <div>
+            <label class="block mb-1.5 font-bold text-slate-600">MRP :</label>
+            <input
+              type="text"
+              id="input-mrp"
+              class="border border-slate-300 rounded-md block w-full px-3 py-2 focus:ring-2 focus:ring-blue-400 outline-none"
+            />
+          </div>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-3 border-t pt-6">
+          <div class="flex items-center gap-2 mr-4">
+            <span class="font-bold text-slate-600">Qty:</span>
+            <input
+              type="number"
+              id="input-qty"
+              value="1"
+              min="1"
+              class="border border-slate-300 rounded-md w-16 px-2 py-1.5 text-center focus:ring-2 focus:ring-blue-400 outline-none"
+            />
+          </div>
+
+          <button
+            id="add-to-queue-btn"
+            class="bg-green-600 text-white px-5 py-2 rounded-lg hover:bg-green-700 transition font-bold flex items-center gap-1"
+          >
+            <span class="text-xl leading-none">+</span> Add to List
+          </button>
+          <button
+            id="print-button"
+            class="bg-slate-500 text-white px-5 py-2 rounded-lg hover:bg-slate-600 transition font-bold"
+          >
+            Print 
+          </button>
+          <button
+            id="clear-inputs-btn"
+            class="bg-amber-500 text-white px-5 py-2 rounded-lg hover:bg-amber-600 transition font-bold ml-auto"
+          >
+            Clear Input boxes
+          </button>
+
+          <button
+            id="clear-queue-btn"
+            class="bg-red-500 text-white px-5 py-2 rounded-lg hover:bg-red-600 transition font-bold"
+          >
+            Clear List
+          </button>
+
+        </div>
+
+        <div class="mt-8 overflow-hidden rounded-lg border border-slate-200">
+          <div class="bg-slate-50 px-4 py-2 border-b border-slate-200">
+            <h3 class="font-bold text-slate-700">Print Queue</h3>
+          </div>
+          <table class="w-full text-left text-sm">
+            <thead
+              class="bg-slate-50 text-slate-400 uppercase text-[10px] tracking-wider"
+            >
+              <tr>
+                <th class="px-4 py-2 font-medium">Product</th>
+                <th class="px-4 py-2 font-medium">Barcode</th>
+                <th class="px-4 py-2 font-medium text-center">MRP</th>
+                <th class="px-4 py-2 font-medium text-center">Qty</th>
+                <th class="px-4 py-2 font-medium text-right">Action</th>
+              </tr>
+            </thead>
+            <tbody
+              id="queue-table-body"
+              class="divide-y divide-slate-100"
+            ></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="mt-10 flex flex-col items-center">
+      <p
+        class="print-hidden text-slate-500 text-sm mb-4 font-mono tracking-widest uppercase"
+      >
+        Printer Layout Preview (100mm x 25mm)
+      </p>
+      <div id="print-area"></div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/jsbarcode/dist/JsBarcode.all.min.js"></script>
+
+    <script>
+      let products = [];
+      let labelQueue = [];
+      const printArea = document.getElementById("print-area");
+      const queueTableBody = document.getElementById("queue-table-body");
+
+      // Helper to keep physical labels and table UI in sync
+      function updateUI() {
+        renderTable();
+        renderPrintLayout();
+      }
+
+      function renderTable() {
+        queueTableBody.innerHTML = "";
+
+        // Group queue by product for table display
+        const grouped = [];
+        labelQueue.forEach((item) => {
+          const existing = grouped.find(
+            (g) => g.barcode === item.barcode && g.name === item.name,
+          );
+          if (existing) {
+            existing.displayQty++;
+          } else {
+            grouped.push({ ...item, displayQty: 1 });
+          }
+        });
+
+        grouped.forEach((item, index) => {
+          const tr = document.createElement("tr");
+          tr.className = "hover:bg-slate-50 transition-colors";
+          tr.innerHTML = `
+                    <td class="px-4 py-3 font-medium text-slate-700">${item.name}</td>
+                    <td class="px-4 py-3 text-slate-500 font-mono">${item.barcode}</td>
+                    <td class="px-4 py-3 text-center text-slate-600">₹${item.mrp}</td>
+                    <td class="px-4 py-3 text-center font-bold text-blue-600">${item.displayQty}</td>
+                    <td class="px-4 py-3 text-right">
+                        <button onclick="removeFromQueue('${item.barcode}')" class="text-red-400 hover:text-red-600 font-bold px-2">✕</button>
+                    </td>
+                `;
+          queueTableBody.appendChild(tr);
+        });
+      }
+
+      function renderPrintLayout() {
+        printArea.innerHTML = "";
+        for (let i = 0; i < labelQueue.length; i += 2) {
+          const row = document.createElement("div");
+          row.className = "label-row";
+          row.appendChild(
+            createLabelHtml(
+              labelQueue[i].name,
+              labelQueue[i].barcode,
+              labelQueue[i].mrp,
+            ),
+          );
+          if (labelQueue[i + 1]) {
+            row.appendChild(
+              createLabelHtml(
+                labelQueue[i + 1].name,
+                labelQueue[i + 1].barcode,
+                labelQueue[i + 1].mrp,
+              ),
+            );
+          } else {
+            const spacer = document.createElement("div");
+            spacer.className = "w-[50mm] h-[25mm] bg-white";
+            row.appendChild(spacer);
+          }
+          printArea.appendChild(row);
+        }
+      }
+
+      function createLabelHtml(name, barcode, mrp) {
+        const container = document.createElement("div");
+        container.className =
+          "w-[50mm] h-[25mm] flex flex-col items-center justify-between py-1 overflow-hidden bg-white label-workspace border-r border-slate-50 last:border-0 font-mono";
+        container.innerHTML = `<div class="w-full px-3 flex justify-center items-end grow bg-blue-200">
+  <p
+    id="label-item-name"
+    class="text-[8pt]  font-bold uppercase truncate leading-none text-center label-item-name-class"
+  >
+    ${name}
+  </p>
+</div>
+
+<div class="flex justify-center items-center grow bg-amber-300">
+  <svg class="barcode-item max-w-full h-5/10 px-1.5 bg-amber-600"></svg>
+</div>
+
+<div
+  class="w-full flex flex-col items-center grow justify-start px-3 bg-blue-300"
+>
+  <p
+    id="label-mrp"
+    class="text-[9pt] font-bold leading-none text-center label-mrp-class"
+  >
+    MRP: ₹ ${mrp}
+  </p>
+</div>`;
+        JsBarcode(container.querySelector(".barcode-item"), barcode, {
+            format: "CODE128",
+            width: 1.6,
+            height: 40,
+            displayValue: true,
+            fontSize: 14,
+            margin: 1,
+            background: "transparent",
+          });
+        return container;
+      }
+
+      // Logic Actions
+      document.getElementById("add-to-queue-btn").onclick = () => {
+        const name = document.getElementById("item-name").value || "N/A";
+        const mrp = document.getElementById("input-mrp").value || "0.00";
+        const barcode =
+          document.getElementById("input-barcode-number").value || "000000";
+        const qty = parseInt(document.getElementById("input-qty").value) || 1;
+
+        for (let i = 0; i < qty; i++) {
+          labelQueue.push({ name, barcode, mrp });
+        }
+        updateUI();
+      };
+
+      window.removeFromQueue = (barcode) => {
+        labelQueue = labelQueue.filter((item) => item.barcode !== barcode);
+        updateUI();
+      };
+
+      document.getElementById("clear-inputs-btn").onclick = () => {
+        document.getElementById("item-name").value = "";
+        document.getElementById("input-barcode-number").value = "";
+        document.getElementById("input-mrp").value = "";
+        document.getElementById("input-qty").value = "1";
+      };
+
+      document.getElementById("clear-queue-btn").onclick = () => {
+        labelQueue = [];
+        updateUI();
+      };
+
+      document.getElementById("print-button").onclick = () => window.print();
+
+      // CSV/Search Logic (Existing)
+      fetch("stock.csv")
+        .then((r) => r.text())
+        .then((text) => {
+          const lines = text.split("\n");
+          products = lines
+            .map((line) => {
+              const parts = line.split(",").map((p) => p.trim());
+              if (parts.length < 2) return null;
+              const barcodeMatch = parts[1].match(/\(([^()]*)\)\s*$/);
+              return {
+                name: barcodeMatch
+                  ? parts[1].replace(/\(([^()]*)\)\s*$/, "").trim()
+                  : parts[1],
+                barcode: barcodeMatch ? barcodeMatch[1] : "",
+                mrp: parts[4] ? parts[4].replace(/[^\d.]/g, "") : "",
+              };
+            })
+            .filter(Boolean);
+        });
+
+      const input = document.getElementById("item-name");
+      const dropdown = document.getElementById("product-list");
+      input.oninput = function () {
+        document.getElementById("input-barcode-number").value = "";
+  document.getElementById("input-mrp").value = "";
+  document.getElementById("input-qty").value = "";
+        const val = this.value.toLowerCase();
+        dropdown.innerHTML = "";
+        if (!val) {
+          dropdown.classList.add("hidden");
+          return;
+        }
+        products
+          .filter((p) => p.name.toLowerCase().includes(val))
+          .slice(0, 10)
+          .forEach((p) => {
+            const li = document.createElement("li");
+            li.textContent = p.name;
+            li.className = "px-3 py-2 cursor-pointer hover:bg-blue-50 text-sm";
+            li.onclick = () => {
+              input.value = p.name;
+              document.getElementById("input-barcode-number").value = p.barcode;
+              document.getElementById("input-mrp").value = p.mrp;
+              dropdown.classList.add("hidden");
+            };
+            dropdown.appendChild(li);
+          });
+        dropdown.classList.remove("hidden");
+      };
+    </script>
+  </body>
+</html>

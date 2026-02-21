@@ -257,14 +257,14 @@
         container.innerHTML = `<div class="w-full px-3 flex justify-center items-end grow bg-blue-200">
   <p
     id="label-item-name"
-    class="text-[10pt]  font-bold uppercase truncate leading-none text-center label-item-name-class"
+    class="text-[9pt]  font-bold uppercase truncate leading-none text-center label-item-name-class"
   >
     ${name}
   </p>
 </div>
 
 <div class="flex justify-center items-center grow bg-amber-300">
-  <svg class="barcode-item max-w-full h-5/10 px-1.5 bg-amber-600"></svg>
+  <svg class="barcode-item max-w-full h-5/10 px-2 bg-amber-600"></svg>
 </div>
 
 <div
@@ -280,9 +280,9 @@
         JsBarcode(container.querySelector(".barcode-item"), barcode, {
             format: "CODE128",
             width: 1.6,
-            height: 40,
+            height: 35,
             displayValue: true,
-            fontSize: 11,
+            fontSize: 12,
             margin: 1,
             background: "transparent",
           });

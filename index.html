@@ -253,7 +253,7 @@
       function createLabelHtml(name, barcode, mrp) {
         const container = document.createElement("div");
         container.className =
-          "w-[50mm] h-[25mm] flex flex-col items-center justify-between py-1 overflow-hidden bg-white label-workspace border-r border-slate-50 last:border-0 font-mono";
+          "w-[50mm] h-[25mm] flex flex-col items-center justify-between py-1 overflow-hidden bg-white label-workspace border-r border-slate-50 last:border-0 ";
         container.innerHTML = `<div class="w-full px-3 flex justify-center items-end grow bg-blue-200">
   <p
     id="label-item-name"
@@ -272,7 +272,7 @@
 >
   <p
     id="label-mrp"
-    class="text-[10pt] font-bold leading-none text-center label-mrp-class"
+    class="text-[9pt] font-bold leading-none text-center label-mrp-class"
   >
     MRP: ₹ ${mrp}
   </p>

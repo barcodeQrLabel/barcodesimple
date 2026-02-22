@@ -6,6 +6,11 @@
     <title>v6- 2up</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
+      /* This controls EACH PRINT ROW size
+         100mm width = full label roll width
+         25mm height = label height
+         flex row = two labels side-by-side (2UP)
+      */
       .label-row {
         width: 100mm;
         height: 25mm;
@@ -15,7 +20,9 @@
         overflow: hidden;
         box-sizing: border-box;
       }
-
+      /* This applies ONLY on SCREEN (not printing)
+         Controls preview layout appearance
+      */
       @media screen {
         #print-area {
           display: flex;
@@ -27,31 +34,40 @@
         }
       }
 
+      /* This applies ONLY during PRINTING */
+
       @media print {
+        /* Hide everything on page */
+
         body * {
           visibility: hidden;
           margin: 0;
           padding: 0;
         }
+        /* Show only print area */
         #print-area,
         #print-area * {
           visibility: visible;
         }
+        /* Fix print area position */
         #print-area {
           position: absolute;
           left: 0;
           top: 0;
           width: 100mm;
         }
+        /* Each row becomes separate page */
         .label-row {
           page-break-after: always;
           page-break-inside: avoid;
           border: none !important;
         }
+        /* Printer page size setup */
         @page {
           size: 100mm 25mm;
           margin: 0;
         }
+        /* Hide UI elements during print */
         .print-hidden {
           display: none !important;
         }
@@ -123,7 +139,7 @@
             id="print-button"
             class="bg-slate-500 text-white px-5 py-2 rounded-lg hover:bg-slate-600 transition font-bold"
           >
-            Print 
+            Print
           </button>
           <button
             id="clear-inputs-btn"
@@ -138,7 +154,6 @@
           >
             Clear List
           </button>
-
         </div>
 
         <div class="mt-8 overflow-hidden rounded-lg border border-slate-200">
@@ -178,17 +193,19 @@
     <script src="https://cdn.jsdelivr.net/npm/jsbarcode/dist/JsBarcode.all.min.js"></script>
 
     <script>
-      let products = [];
-      let labelQueue = [];
-      const printArea = document.getElementById("print-area");
-      const queueTableBody = document.getElementById("queue-table-body");
+      let products = []; // Stores data loaded from stock.csv
 
-      // Helper to keep physical labels and table UI in sync
+      let labelQueue = []; // Stores the list of labels to be printed
+
+      const printArea = document.getElementById("print-area");
+
+      const queueTableBody = document.getElementById("queue-table-body");
+      // Orchestrator function to refresh both the visible table and the print layout
       function updateUI() {
         renderTable();
         renderPrintLayout();
       }
-
+      // Populates the "Print Queue" table based on the labelQueue array. It groups identical products together and displays their name, barcode, MRP, and quantity. Each row also includes a button to remove that product from the queue.
       function renderTable() {
         queueTableBody.innerHTML = "";
 
@@ -205,22 +222,38 @@
           }
         });
 
-        grouped.forEach((item, index) => {
-          const tr = document.createElement("tr");
-          tr.className = "hover:bg-slate-50 transition-colors";
-          tr.innerHTML = `
-                    <td class="px-4 py-3 font-medium text-slate-700">${item.name}</td>
-                    <td class="px-4 py-3 text-slate-500 font-mono">${item.barcode}</td>
-                    <td class="px-4 py-3 text-center text-slate-600">₹${item.mrp}</td>
-                    <td class="px-4 py-3 text-center font-bold text-blue-600">${item.displayQty}</td>
-                    <td class="px-4 py-3 text-right">
-                        <button onclick="removeFromQueue('${item.barcode}')" class="text-red-400 hover:text-red-600 font-bold px-2">✕</button>
-                    </td>
-                `;
-          queueTableBody.appendChild(tr);
-        });
-      }
+grouped.forEach((item, index) => {
+  // ESCAPE QUOTES: This prevents names like "Men's Shirt" from breaking the JS
+  const escapedName = item.name.replace(/'/g, "\\'"); 
 
+  const tr = document.createElement("tr");
+  tr.className = "hover:bg-slate-50 transition-colors";
+  tr.innerHTML = `
+    <td class="px-4 py-3 font-medium text-slate-700">${item.name}</td>
+    <td class="px-4 py-3 font-mono text-slate-500">${item.barcode}</td>
+    <td class="px-4 py-3 text-center">
+      <input 
+        type="text" 
+        value="${item.mrp}" 
+        onchange="updateQueueMRP('${item.barcode}', this.value, '${escapedName}')"
+        class="w-20 border border-slate-200 rounded text-center outline-none"
+      />
+    </td>
+    <td class="px-4 py-3 text-center">
+      <input 
+        type="number" 
+        value="${item.displayQty}" 
+        onchange="updateQueueQty('${item.barcode}', this.value, '${escapedName}')"
+        class="w-16 border border-slate-200 rounded text-center font-bold text-blue-600 outline-none"
+      />
+    </td>
+    <td class="px-4 py-3 text-right">
+      <button onclick="removeFromQueue('${item.barcode}', '${escapedName}')" class="text-red-400 hover:text-red-600">✕</button>
+    </td>
+  `;
+  queueTableBody.appendChild(tr);
+});      }
+      // Creates the HTML structure for a single 50mm x 25mm label and populates it with the product name, barcode, and MRP. It also generates the barcode using JsBarcode.
       function renderPrintLayout() {
         printArea.innerHTML = "";
         for (let i = 0; i < labelQueue.length; i += 2) {
@@ -253,43 +286,45 @@
       function createLabelHtml(name, barcode, mrp) {
         const container = document.createElement("div");
         container.className =
-          "w-[50mm] h-[25mm] flex flex-col items-center justify-between py-1 overflow-hidden bg-white label-workspace border-r border-slate-50 last:border-0 ";
-        container.innerHTML = `<div class="w-full px-3 flex justify-center items-end grow bg-blue-200">
-  <p
-    id="label-item-name"
-    class="text-[9pt]  font-bold uppercase truncate leading-none text-center label-item-name-class"
-  >
-    ${name}
-  </p>
-</div>
+          "w-[50mm] h-[25mm] flex flex-col items-center justify-between py-1 overflow-hidden bg-white label-workspace border-r border-slate-50 last:border-0";
+        container.innerHTML = `
+        <div class="w-full px-3 flex justify-center items-end grow bg-blue-200">
+         <p
+        id="label-item-name"
+        class="text-[9pt]  font-bold uppercase truncate leading-none text-center label-item-name-class"
+         >
+        ${name}
+         </p>
+        </div>
 
-<div class="flex justify-center items-center grow bg-amber-300">
-  <svg class="barcode-item max-w-full h-5/10 px-2 bg-amber-600"></svg>
-</div>
+        <div class="flex justify-center items-center grow bg-amber-300">
+        <svg class="barcode-item max-w-full h-5/10 px-2 bg-amber-600"></svg>
+        </div>
 
-<div
-  class="w-full flex flex-col items-center grow justify-start px-3 bg-blue-300"
->
-  <p
-    id="label-mrp"
-    class="text-[9pt] font-bold leading-none text-center label-mrp-class"
-  >
-    MRP: ₹ ${mrp}
-  </p>
-</div>`;
+         <div
+        class="w-full flex flex-col items-center grow justify-start px-3 bg-blue-300"
+        >
+        <p
+        id="label-mrp"
+        class="text-[9pt] font-bold leading-none text-center label-mrp-class"
+       >
+        MRP: ₹ ${mrp}
+      </p>
+      </div>
+`;
+
         JsBarcode(container.querySelector(".barcode-item"), barcode, {
-            format: "CODE128",
-            width: 1.6,
-            height: 35,
-            displayValue: true,
-            fontSize: 12,
-            margin: 1,
-            background: "transparent",
-          });
+          format: "CODE128",
+          width: 1.6,
+          height: 36,
+          displayValue: true,
+          fontSize: 12,
+          margin: 1,
+          background: "transparent",
+        });
         return container;
       }
-
-      // Logic Actions
+      // Control: Add item from inputs to the print list. It reads the item name, barcode, MRP, and quantity from the input fields. It then adds the specified quantity of that item to the labelQueue array and updates the UI.
       document.getElementById("add-to-queue-btn").onclick = () => {
         const name = document.getElementById("item-name").value || "N/A";
         const mrp = document.getElementById("input-mrp").value || "0.00";
@@ -302,76 +337,211 @@
         }
         updateUI();
       };
-
+      // Control: Remove specific product from the print list. It takes a barcode as an argument, filters out all items with that barcode from the labelQueue array, and then updates the UI to reflect the change.
       window.removeFromQueue = (barcode) => {
         labelQueue = labelQueue.filter((item) => item.barcode !== barcode);
         updateUI();
       };
-
+      // Control: Reset the input fields to their default state. It clears the item name, barcode number, and MRP fields, and resets the quantity to 1.
       document.getElementById("clear-inputs-btn").onclick = () => {
         document.getElementById("item-name").value = "";
         document.getElementById("input-barcode-number").value = "";
         document.getElementById("input-mrp").value = "";
         document.getElementById("input-qty").value = "1";
       };
-
+      // Control: Wipe the entire print list. It clears the labelQueue array and updates the UI to show an empty print queue and preview area.
       document.getElementById("clear-queue-btn").onclick = () => {
         labelQueue = [];
         updateUI();
       };
-
+      // Control: Open the browser print dialog to print the labels. It triggers the window.print() function, which will print only the #print-area content due to the CSS print media rules defined earlier.
       document.getElementById("print-button").onclick = () => window.print();
-
-      // CSV/Search Logic (Existing)
+      // Data Loading: Fetches stock.csv and parses it into an array of product objects. Each line in the CSV is expected to have the format: ID, Name (with optional barcode in parentheses), Category, Subcategory, MRP. The parsed products are stored in the products array for use in the autocomplete functionality.
       fetch("stock.csv")
         .then((r) => r.text())
         .then((text) => {
           const lines = text.split("\n");
           products = lines
             .map((line) => {
-              const parts = line.split(",").map((p) => p.trim());
+              const parts = line
+                .split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/)
+                .map((p) => p.trim());
               if (parts.length < 2) return null;
+              // Regex to extract barcode if it's inside parentheses at the end of the name field
               const barcodeMatch = parts[1].match(/\(([^()]*)\)\s*$/);
               return {
                 name: barcodeMatch
                   ? parts[1].replace(/\(([^()]*)\)\s*$/, "").trim()
                   : parts[1],
                 barcode: barcodeMatch ? barcodeMatch[1] : "",
-                mrp: parts[4] ? parts[4].replace(/[^\d.]/g, "") : "",
+                mrp: parts[6] ? parts[6].replace(/[^\d.]/g, "") : "",
               };
             })
             .filter(Boolean);
         });
-
+      // Search Logic: Filters the product list as the user types in the item name input field. It listens for input events on the item name field, clears the barcode, MRP, and quantity fields, and then filters the products array to find matches based on the input value. Matching products are displayed in a dropdown list below the input field. Clicking on a product in the dropdown will populate the input fields with that product's details and hide the dropdown.
       const input = document.getElementById("item-name");
       const dropdown = document.getElementById("product-list");
+      // Clear dependent fields when user starts typing a new search and show matching products in dropdown
       input.oninput = function () {
-        document.getElementById("input-barcode-number").value = "";
+        currentFocus = -1;
+// NEW: Clear dependent fields as soon as the user starts typing
+  document.getElementById("input-barcode-number").value = "";
   document.getElementById("input-mrp").value = "";
-  document.getElementById("input-qty").value = "";
-        const val = this.value.toLowerCase();
+  document.getElementById("input-qty").value = "1"; // Reset to default 1
+        // 1. Normalize user input: Remove all spaces and symbols
+        const rawValue = this.value;
+        const cleanInput = rawValue.toLowerCase().replace(/[^a-z0-9]/g, "");
+
         dropdown.innerHTML = "";
-        if (!val) {
+
+        if (!cleanInput) {
           dropdown.classList.add("hidden");
           return;
         }
-        products
-          .filter((p) => p.name.toLowerCase().includes(val))
-          .slice(0, 10)
-          .forEach((p) => {
+
+        // 2. Filter logic: Split matches into "Starts With" and "Contains"
+        const startsWithMatches = [];
+        const containsMatches = [];
+
+        products.forEach((p) => {
+          const cleanProductName = p.name
+            .toLowerCase()
+            .replace(/[^a-z0-9]/g, "");
+
+          if (cleanProductName.startsWith(cleanInput)) {
+            startsWithMatches.push(p);
+          } else if (cleanProductName.includes(cleanInput)) {
+            containsMatches.push(p);
+          }
+        });
+
+        // Combine them: StartsWith items first, then Contains items
+        const matches = [...startsWithMatches, ...containsMatches];
+
+        // 3. Render the matching results
+        if (matches.length > 0) {
+          // Slice to 10-15 results to keep the dropdown manageable
+          matches.slice(0, 20).forEach((p) => {
+
             const li = document.createElement("li");
             li.textContent = p.name;
-            li.className = "px-3 py-2 cursor-pointer hover:bg-blue-50 text-sm";
+            li.className =
+              "px-3 py-2 cursor-pointer hover:bg-blue-50 text-sm border-b border-slate-100";
+
             li.onclick = () => {
               input.value = p.name;
               document.getElementById("input-barcode-number").value = p.barcode;
               document.getElementById("input-mrp").value = p.mrp;
               dropdown.classList.add("hidden");
             };
+            
+            
             dropdown.appendChild(li);
           });
-        dropdown.classList.remove("hidden");
-      };
+          dropdown.classList.remove("hidden");
+        } else {
+          dropdown.classList.add("hidden");
+        }
+        
+        
+      }; // 1. Variable to track the current index of the highlighted item
+      let currentFocus = -1;
+
+      // 2. Listen for keydown events on the item name input
+      input.addEventListener("keydown", function (e) {
+        let list = document.getElementById("product-list");
+        if (list) list = list.getElementsByTagName("li");
+
+        if (e.keyCode == 40) {
+          // Arrow DOWN
+          currentFocus++;
+          addActive(list);
+        } else if (e.keyCode == 38) {
+          // Arrow UP
+          currentFocus--;
+          addActive(list);
+        } else if (e.keyCode == 13) {
+          // ENTER key
+          e.preventDefault(); // Prevent form submission
+          if (currentFocus > -1) {
+            if (list) list[currentFocus].click(); // Simulate a click on the highlighted item
+          }
+        }
+      });
+
+      // 3. Function to visually highlight the selected item
+      function addActive(list) {
+        if (!list) return false;
+        removeActive(list); // Clear previous highlights
+
+        if (currentFocus >= list.length) currentFocus = 0; // Loop to top
+        if (currentFocus < 0) currentFocus = list.length - 1; // Loop to bottom
+
+        // Add Tailwind classes for the "focus" state
+        list[currentFocus].classList.add("bg-blue-100", "font-bold");
+
+        // Ensure the highlighted item is visible in the scrollable list
+        list[currentFocus].scrollIntoView({ block: "nearest" });
+      }
+
+      // 4. Function to remove the highlight from all items
+      function removeActive(list) {
+        for (let i = 0; i < list.length; i++) {
+          list[i].classList.remove("bg-blue-100", "font-bold");
+        }
+      }
+
+      // 5. Reset the focus index whenever the input changes (inside your existing oninput)
+      // Note: You should set 'currentFocus = -1;' at the start of your input.oninput function.
+
+
+
+
+window.updateQueueQty = (barcode, newQty, name) => {
+  const targetQty = parseInt(newQty);
+  if (isNaN(targetQty) || targetQty < 1) return;
+
+  // Find the product that matches BOTH name and barcode
+  const template = labelQueue.find(item => item.barcode === barcode && item.name === name);
+  if (!template) return;
+
+  // Filter out ONLY that specific product
+  labelQueue = labelQueue.filter(item => !(item.barcode === barcode && item.name === name));
+
+  // Add back the new quantity
+  for (let i = 0; i < targetQty; i++) {
+    labelQueue.push({ ...template });
+  }
+
+  renderPrintLayout(); 
+};
+
+window.updateQueueMRP = (barcode, newMRP, name) => {
+  const formattedMRP = newMRP.replace(/[^\d.]/g, "");
+  
+  // Update only the instances matching name AND barcode
+  labelQueue.forEach(item => {
+    if (item.barcode === barcode && item.name === name) {
+      item.mrp = formattedMRP;
+    }
+  });
+
+  renderPrintLayout();
+};
+
+window.removeFromQueue = (barcode, name) => {
+  // Again, use both barcode and name for precision
+  labelQueue = labelQueue.filter((item) => !(item.barcode === barcode && item.name === name));
+  updateUI();
+};
+
+document.getElementById("input-qty").addEventListener("keydown", function(e) {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    document.getElementById("add-to-queue-btn").click();
+  }
+});
     </script>
   </body>
 </html>
